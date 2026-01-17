@@ -131,4 +131,15 @@ def main(page: ft.Page):
     page.add(mobil_ekran)
 
 
-ft.app(target=main, view=ft.AppView.WEB_BROWSER)
+import os # En üste ekleyin
+
+# ... (tüm kodlarınız aynı kalıyor)
+
+# En alttaki ft.app satırını bununla değiştirin:
+if __name__ == "__main__":
+    ft.app(
+        target=main, 
+        view=ft.AppView.WEB_BROWSER, 
+        port=int(os.getenv("PORT", 8080)), # Render'ın verdiği portu kullanır
+        host="0.0.0.0" # Dış dünyaya açılmasını sağlar
+    )
