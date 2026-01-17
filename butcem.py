@@ -2,77 +2,152 @@ import flet as ft
 import os
 
 def main(page: ft.Page):
-    page.title = "Akıllı Bütçe Yönetimi"
+    # --- SAYFA AYARLARI ---
+    page.title = "Bütçe 2026"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.bgcolor = "#f2f2f7"
+    page.bgcolor = "#f2f2f7" # iOS Gri Arka Plan
+    page.padding = 0
+    page.spacing = 0
 
-    # --- VERİLER ---
-    guncel_brut = 80622.0  #
-    zam_orani = 0.1860      #
-    maas_geliri = 79000.0   #
-    gumus_geliri = 12000.0  #
+    # --- KİŞİSEL VERİLER (Ocak 2026) ---
+    guncel_brut = 80622.0
+    zam_orani = 0.1860
     
-    kartlar = {"H": 2795, "V": 15700, "Y": 10370, "Q": 3123, "G": 23700} #
-    harc_ucreti = 52000.0   #
+    # Gelirler
+    maas_geliri = 79000.0
+    gumus_geliri = 12000.0
+    
+    # Borçlar (H, V, Y, Q, G Kartları ve Harç)
+    kartlar = {"H": 2795, "V": 15700, "Y": 10370, "Q": 3123, "G": 23700}
+    harc_ucreti = 52000.0
 
-    # --- GÖRÜNÜM MODÜLLERİ ---
-    def ozet_view():
-        return ft.Column([
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("Toplam Aylık Gelir", color="white70"),
-                    ft.Text(f"₺ {maas_geliri + gumus_geliri:,.2f}", size=30, weight="bold", color="white"),
-                ]),
-                bgcolor="blue", padding=20, border_radius=15
-            ),
-            ft.Text("Önemli Ödemeler", size=18, weight="bold"),
-            ft.ListTile(leading=ft.Icon("school"), title=ft.Text("Harç Ücreti"), trailing=ft.Text(f"₺ {harc_ucreti:,.0f}")),
-            ft.ListTile(leading=ft.Icon("credit_card"), title=ft.Text("Kredi Kartları"), trailing=ft.Text(f"₺ {sum(kartlar.values()):,.0f}"))
-        ], scroll=ft.ScrollMode.AUTO)
+    # --- GÖRÜNÜM 1: ÖZET EKRANI ---
+    def get_ozet_view():
+        toplam_gelir = maas_geliri + gumus_geliri
+        toplam_borc = sum(kartlar.values()) + harc_ucreti
+        kalan = toplam_gelir - toplam_borc
 
-    def gelir_view():
-        yeni_maas = guncel_brut * (1 + zam_orani)
-        return ft.Column([
-            ft.Text("Maaş Analizi (2026 Ocak)", size=20, weight="bold"),
-            ft.Card(content=ft.Container(padding=15, content=ft.Column([
-                ft.Text(f"Güncel Brüt: ₺ {guncel_brut:,.2f}"),
-                ft.Text(f"Zam Oranı: % {zam_orani*100:.2f}"),
+        return ft.Container(
+            padding=20,
+            content=ft.Column([
+                ft.Container(height=20), # Üst boşluk
+                ft.Text("Ocak 2026 Durumu", size=24, weight="bold", color="black"),
+                
+                # Mavi Kart (Net Durum)
+                ft.Container(
+                    bgcolor="blue",
+                    padding=20,
+                    border_radius=20,
+                    content=ft.Column([
+                        ft.Text("Toplam Gelir", color="white70"),
+                        ft.Text(f"₺ {toplam_gelir:,.0f}", size=28, weight="bold", color="white"),
+                        ft.Divider(color="white24"),
+                        ft.Row([
+                            ft.Column([
+                                ft.Text("Giderler", color="white70", size=12),
+                                ft.Text(f"- ₺ {toplam_borc:,.0f}", color="white", weight="bold"),
+                            ]),
+                            ft.Column([
+                                ft.Text("Kalan Nakit", color="white70", size=12),
+                                ft.Text(f"₺ {kalan:,.0f}", color="orange" if kalan < 0 else "lightgreen", weight="bold"),
+                            ], alignment=ft.MainAxisAlignment.END),
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                    ])
+                ),
+                ft.Divider(height=30, color="transparent"),
+                ft.Text("Hızlı Bakış", size=16, weight="bold", color="grey"),
+                ft.ListTile(leading=ft.Icon("school", color="red"), title=ft.Text("Harç Ödemesi"), trailing=ft.Text(f"₺ {harc_ucreti:,.0f}")),
+                ft.ListTile(leading=ft.Icon("credit_card", color="orange"), title=ft.Text("Kart Borçları"), trailing=ft.Text(f"₺ {sum(kartlar.values()):,.0f}")),
+            ], scroll=ft.ScrollMode.AUTO)
+        )
+
+    # --- GÖRÜNÜM 2: MAAŞ HESAPLAMA ---
+    def get_maas_view():
+        yeni_brut = guncel_brut * (1 + zam_orani)
+        return ft.Container(
+            padding=20,
+            content=ft.Column([
+                ft.Container(height=20),
+                ft.Text("Maaş Analizi", size=24, weight="bold", color="black"),
+                ft.Card(
+                    color="white",
+                    elevation=5,
+                    content=ft.Container(
+                        padding=20,
+                        content=ft.Column([
+                            ft.Text("Kamu Personeli Maaş", weight="bold", size=16),
+                            ft.Divider(),
+                            ft.Row([ft.Text("Mevcut Brüt:"), ft.Text(f"₺ {guncel_brut:,.2f}")] , alignment="spaceBetween"),
+                            ft.Row([ft.Text("Zam Oranı:"), ft.Text(f"% {zam_orani*100:.2f}")], alignment="spaceBetween"),
+                            ft.Divider(),
+                            ft.Row([ft.Text("Tahmini Yeni Brüt:", color="green", weight="bold"), ft.Text(f"₺ {yeni_brut:,.2f}", color="green", weight="bold")], alignment="spaceBetween"),
+                        ])
+                    )
+                ),
+                ft.Container(height=20),
+                ft.Text("Ek Gelirler", size=16, weight="bold", color="grey"),
+                ft.ListTile(leading=ft.Icon("star", color="yellow"), title=ft.Text("Gümüş Getirisi"), subtitle=ft.Text("Yatırım/Satış"), trailing=ft.Text(f"₺ {gumus_geliri:,.0f}")),
+            ])
+        )
+
+    # --- GÖRÜNÜM 3: BORÇ DETAYLARI ---
+    def get_borc_view():
+        borc_listesi = []
+        for kart, miktar in kartlar.items():
+            borc_listesi.append(
+                ft.ListTile(
+                    leading=ft.CircleAvatar(content=ft.Text(kart), bgcolor="red"),
+                    title=ft.Text(f"{kart} Kartı"),
+                    trailing=ft.Text(f"₺ {miktar:,.0f}", weight="bold", color="red")
+                )
+            )
+        
+        return ft.Container(
+            padding=20,
+            content=ft.Column([
+                ft.Container(height=20),
+                ft.Text("Borç Detayları", size=24, weight="bold", color="black"),
+                ft.Text("Kredi Kartları", size=16, weight="bold", color="grey"),
+                ft.Column(borc_listesi),
                 ft.Divider(),
-                ft.Text(f"Yeni Brüt Tahmini: ₺ {yeni_maas:,.2f}", weight="bold", color="green")
-            ])))
-        ])
+                ft.ListTile(
+                    leading=ft.Icon("warning", color="red"),
+                    title=ft.Text("Harç Ücreti", weight="bold"),
+                    subtitle=ft.Text("Tek seferlik ödeme"),
+                    trailing=ft.Text(f"₺ {harc_ucreti:,.0f}", weight="bold", color="red")
+                )
+            ], scroll=ft.ScrollMode.AUTO)
+        )
 
-    def borc_view():
-        rows = [ft.ListTile(title=ft.Text(f"{k} Kartı Borcu"), trailing=ft.Text(f"₺ {v:,.0f}")) for k, v in kartlar.items()]
-        return ft.Column([ft.Text("Kart Borç Detayları", size=20, weight="bold")] + rows)
+    # --- ANA YAPI VE MENÜ ---
+    
+    # İçeriğin değişeceği alan
+    icerik_alani = ft.Container(content=get_ozet_view(), expand=True)
 
-    content_area = ft.Container(content=ozet_view(), padding=10, expand=True)
-
-    def tab_change(e):
-        idx = e.control.selected_index
-        if idx == 0: content_area.content = ozet_view()
-        elif idx == 1: content_area.content = gelir_view()
-        elif idx == 2: content_area.content = borc_view()
+    def menuyu_degistir(e):
+        secilen = e.control.selected_index
+        if secilen == 0:
+            icerik_alani.content = get_ozet_view()
+        elif secilen == 1:
+            icerik_alani.content = get_maas_view()
+        elif secilen == 2:
+            icerik_alani.content = get_borc_view()
         page.update()
 
-    page.navigation_bar = ft.NavigationBar(
+    # Alt Menü (En güvenli yöntem)
+    alt_menu = ft.NavigationBar(
+        selected_index=0,
+        on_change=menuyu_degistir,
         destinations=[
-            ft.NavigationDestination(icon="home", label="Özet"),
-            ft.NavigationDestination(icon="trending_up", label="Maaş"),
-            ft.NavigationDestination(icon="payments", label="Borçlar"),
-        ],
-        on_change=tab_change
+            ft.NavigationDestination(icon=ft.icons.HOME, label="Özet"),
+            ft.NavigationDestination(icon=ft.icons.TRENDING_UP, label="Gelir"),
+            ft.NavigationDestination(icon=ft.icons.CREDIT_CARD, label="Borçlar"),
+        ]
     )
 
-    page.add(content_area)
+    page.add(icerik_alani, alt_menu)
 
-# --- RENDER İÇİN PORT VE HOST AYARI ---
+# --- RENDER BAŞLATMA AYARI ---
 if __name__ == "__main__":
-    # Render'ın verdiği portu kullan, yoksa 8080 kullan
-    port = int(os.getenv("PORT", 8080)) 
-    ft.app(
-        target=main, 
-        view=ft.AppView.WEB_BROWSER, 
-        port=port, 
-        host="0.0.0.0" # Bu satır dış erişim için zorunludur
-    )
+    port = int(os.getenv("PORT", 8080))
+    ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=port, host="0.0.0.0")
