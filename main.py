@@ -2,101 +2,111 @@ import flet as ft
 import os
 
 def main(page: ft.Page):
-    # --- AYARLAR ---
+    # --- 1. AYARLAR ---
     page.title = "Cüzdan 2026"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.bgcolor = "#111111" 
+    page.bgcolor = "#111111" # Bilgisayar ekranı siyah olsun
     page.padding = 0
-    # ESKİ SÜRÜM UYUMLU HİZALAMA (Shortcuts yok)
+    
+    # HATA ÇIKARAN KISAYOLLARI SİLDİK.
+    # Hizalamayı manuel yapıyoruz:
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     page.horizontal_alignment = ft.MainAxisAlignment.CENTER
 
-    # --- VERİLER ---
-    guncel_brut = 80622.0
-    zam_orani = 0.1860
-    maas_geliri = 79000.0
-    gumus_geliri = 12000.0
-    kartlar = {"H": 2795, "V": 15700, "Y": 10370, "Q": 3123, "G": 23700}
-    harc_ucreti = 52000.0
+    # --- 2. VERİLER ---
+    maas = 79000
+    gumus = 12000
+    borclar = 52000 + 2795 + 15700 + 10370 + 3123 + 23700
+    gelir = maas + gumus
+    kalan = gelir - borclar
 
-    # --- HESAPLAMALAR ---
-    toplam_gelir = maas_geliri + gumus_geliri
-    toplam_borc = sum(kartlar.values()) + harc_ucreti
-    kalan = toplam_gelir - toplam_borc
-    yeni_maas = guncel_brut * (1 + zam_orani)
-
-    # --- İÇERİK PARÇALARI ---
+    # --- 3. İÇERİK PARÇALARI ---
     
-    # 1. ÖZET SAYFASI
-    ozet_icerik = ft.Column([
-        ft.Text("OCAK 2026", size=24, weight="bold", color="black"),
-        ft.Container(height=10),
+    # Basit kart yapıcı fonksiyon
+    def kart_yap(baslik, tutar, renk):
+        return ft.Container(
+            padding=15, bgcolor="white", border_radius=10, margin=ft.margin.only(bottom=5),
+            content=ft.Row([
+                ft.Text(baslik, color="black", weight="bold"),
+                ft.Text(f"{tutar} TL", color=renk, weight="bold")
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        )
+
+    # ÖZET SAYFASI TASARIMI
+    ozet_sayfasi = ft.Column([
+        ft.Text("OCAK 2026", size=30, weight="bold", color="black"),
+        ft.Container(height=20),
         ft.Container(
             padding=20, bgcolor="blue", border_radius=15,
             content=ft.Column([
                 ft.Text("Kalan Nakit", color="white"),
-                ft.Text(f"{kalan:,.0f} TL", size=30, weight="bold", color="white")
+                ft.Text(f"{kalan} TL", size=40, weight="bold", color="white")
             ])
         ),
         ft.Container(height=20),
-        ft.Text("Gelirler: " + f"{toplam_gelir:,.0f} TL", color="green", weight="bold"),
-        ft.Text("Giderler: " + f"{toplam_borc:,.0f} TL", color="red", weight="bold"),
+        kart_yap("Toplam Gelir", gelir, "green"),
+        kart_yap("Toplam Gider", borclar, "red"),
     ])
 
-    # 2. MAAŞ SAYFASI
-    maas_icerik = ft.Column([
-        ft.Text("MAAŞ ANALİZİ", size=24, weight="bold", color="black"),
+    # GELİR SAYFASI TASARIMI
+    gelir_sayfasi = ft.Column([
+        ft.Text("GELİRLER", size=30, weight="bold", color="black"),
         ft.Container(height=20),
-        ft.Container(
-            padding=15, bgcolor="white", border_radius=10,
-            content=ft.Column([
-                ft.Text(f"Eski Brüt: {guncel_brut}", color="black"),
-                ft.Text(f"Zam Oranı: %18.60", color="black"),
-                ft.Divider(),
-                ft.Text(f"YENİ BRÜT: {yeni_maas:,.2f} TL", color="green", weight="bold"),
-            ])
-        )
-    ])
-
-    # 3. BORÇ SAYFASI
-    borc_icerik = ft.Column([
-        ft.Text("BORÇ LİSTESİ", size=24, weight="bold", color="black"),
+        kart_yap("Maaş", maas, "blue"),
+        kart_yap("Gümüş", gumus, "orange"),
         ft.Container(height=10),
-        ft.Text(f"Harç: {harc_ucreti} TL", color="red"),
-        ft.Text(f"Kredi Kartları: {sum(kartlar.values())} TL", color="red"),
+        ft.Container(padding=10, content=ft.Text("Not: Maaş zammı %18.60 oranına göre hesaplanmıştır.", color="grey"))
     ])
 
-    # --- ANA YAPI ---
-    ekran_kutusu = ft.Container(content=ozet_icerik, padding=20, expand=True)
+    # BORÇ SAYFASI TASARIMI
+    borc_sayfasi = ft.Column([
+        ft.Text("BORÇLAR", size=30, weight="bold", color="black"),
+        ft.Container(height=20),
+        kart_yap("Harç", 52000, "red"),
+        kart_yap("Kredi Kartları", borclar - 52000, "red"),
+    ])
 
-    def menu_tikla(e, sayfa_no):
-        if sayfa_no == 1: ekran_kutusu.content = ozet_icerik
-        if sayfa_no == 2: ekran_kutusu.content = maas_icerik
-        if sayfa_no == 3: ekran_kutusu.content = borc_icerik
+    # --- 4. ANA YAPI VE TELEFON ÇERÇEVESİ ---
+    
+    # İçeriğin değiştiği kutu
+    icerik_alani = ft.Container(content=ozet_sayfasi, expand=True, padding=20)
+
+    # Sayfa değiştirme fonksiyonu
+    def sayfa_degis(e, hedef):
+        if hedef == "ozet": icerik_alani.content = ozet_sayfasi
+        if hedef == "gelir": icerik_alani.content = gelir_sayfasi
+        if hedef == "borc": icerik_alani.content = borc_sayfasi
         page.update()
 
-    # SANAL TELEFON (Koordinat sistemi ile ortalama - Hata vermez)
+    # SANAL TELEFON (Sorunlu 'alignment.center' yerine 'Alignment(0,0)' kullandık)
     telefon = ft.Container(
-        width=390, height=844, bgcolor="#f2f2f7", border_radius=30,
-        # İŞTE ÇÖZÜM: alignment.center YERİNE Alignment(0,0)
-        alignment=ft.Alignment(0, 0), 
+        width=390, height=844, 
+        bgcolor="#f2f2f7", 
+        border_radius=30,
+        
+        # İŞTE ÇÖZÜM BURADA:
+        # ft.alignment.center YERİNE AŞAĞIDAKİ SATIRI KULLANIYORUZ:
+        alignment=ft.Alignment(0, 0),
+        
         content=ft.Column([
-            ft.Container(height=40), # Çentik
-            ekran_kutusu,
-            # BASİT BUTON MENÜSÜ
+            ft.Container(height=40), # Çentik boşluğu
+            icerik_alani,
+            
+            # Alt Menü (Basit Butonlar - Hata Vermez)
             ft.Container(
-                height=70, bgcolor="white",
+                bgcolor="white", height=80,
                 content=ft.Row([
-                    ft.ElevatedButton("Özet", on_click=lambda e: menu_tikla(e, 1)),
-                    ft.ElevatedButton("Maaş", on_click=lambda e: menu_tikla(e, 2)),
-                    ft.ElevatedButton("Borç", on_click=lambda e: menu_tikla(e, 3)),
+                    ft.ElevatedButton("Özet", on_click=lambda e: sayfa_degis(e, "ozet")),
+                    ft.ElevatedButton("Gelir", on_click=lambda e: sayfa_degis(e, "gelir")),
+                    ft.ElevatedButton("Borç", on_click=lambda e: sayfa_degis(e, "borc")),
                 ], alignment=ft.MainAxisAlignment.CENTER)
             )
         ])
     )
-
+    
     page.add(telefon)
 
+# --- PORT AYARI ---
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=port, host="0.0.0.0")
