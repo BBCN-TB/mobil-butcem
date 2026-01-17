@@ -5,23 +5,19 @@ def main(page: ft.Page):
     # --- SAYFA AYARLARI ---
     page.title = "Bütçe 2026"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.bgcolor = "#f2f2f7" # iOS Gri Arka Plan
+    page.bgcolor = "#f2f2f7"
     page.padding = 0
     page.spacing = 0
 
-    # --- KİŞİSEL VERİLER (Ocak 2026) ---
+    # --- KİŞİSEL VERİLER ---
     guncel_brut = 80622.0
     zam_orani = 0.1860
-    
-    # Gelirler
     maas_geliri = 79000.0
     gumus_geliri = 12000.0
-    
-    # Borçlar (H, V, Y, Q, G Kartları ve Harç)
     kartlar = {"H": 2795, "V": 15700, "Y": 10370, "Q": 3123, "G": 23700}
     harc_ucreti = 52000.0
 
-    # --- GÖRÜNÜM 1: ÖZET EKRANI ---
+    # --- 1. ÖZET GÖRÜNÜMÜ ---
     def get_ozet_view():
         toplam_gelir = maas_geliri + gumus_geliri
         toplam_borc = sum(kartlar.values()) + harc_ucreti
@@ -30,10 +26,9 @@ def main(page: ft.Page):
         return ft.Container(
             padding=20,
             content=ft.Column([
-                ft.Container(height=20), # Üst boşluk
+                ft.Container(height=20),
                 ft.Text("Ocak 2026 Durumu", size=24, weight="bold", color="black"),
                 
-                # Mavi Kart (Net Durum)
                 ft.Container(
                     bgcolor="blue",
                     padding=20,
@@ -61,7 +56,7 @@ def main(page: ft.Page):
             ], scroll=ft.ScrollMode.AUTO)
         )
 
-    # --- GÖRÜNÜM 2: MAAŞ HESAPLAMA ---
+    # --- 2. MAAŞ GÖRÜNÜMÜ ---
     def get_maas_view():
         yeni_brut = guncel_brut * (1 + zam_orani)
         return ft.Container(
@@ -90,7 +85,7 @@ def main(page: ft.Page):
             ])
         )
 
-    # --- GÖRÜNÜM 3: BORÇ DETAYLARI ---
+    # --- 3. BORÇ GÖRÜNÜMÜ ---
     def get_borc_view():
         borc_listesi = []
         for kart, miktar in kartlar.items():
@@ -119,9 +114,7 @@ def main(page: ft.Page):
             ], scroll=ft.ScrollMode.AUTO)
         )
 
-    # --- ANA YAPI VE MENÜ ---
-    
-    # İçeriğin değişeceği alan
+    # --- MENÜ YÖNETİMİ ---
     icerik_alani = ft.Container(content=get_ozet_view(), expand=True)
 
     def menuyu_degistir(e):
@@ -134,20 +127,21 @@ def main(page: ft.Page):
             icerik_alani.content = get_borc_view()
         page.update()
 
-    # Alt Menü (En güvenli yöntem)
+    # DÜZELTME BURADA: NavigationDestination yerine NavigationBarDestination kullanıldı
+    # Ayrıca ikonları garanti olsun diye "string" olarak yazdık.
     alt_menu = ft.NavigationBar(
         selected_index=0,
         on_change=menuyu_degistir,
         destinations=[
-            ft.NavigationDestination(icon=ft.icons.HOME, label="Özet"),
-            ft.NavigationDestination(icon=ft.icons.TRENDING_UP, label="Gelir"),
-            ft.NavigationDestination(icon=ft.icons.CREDIT_CARD, label="Borçlar"),
+            ft.NavigationBarDestination(icon="home", label="Özet"),
+            ft.NavigationBarDestination(icon="trending_up", label="Gelir"),
+            ft.NavigationBarDestination(icon="credit_card", label="Borçlar"),
         ]
     )
 
     page.add(icerik_alani, alt_menu)
 
-# --- RENDER BAŞLATMA AYARI ---
+# --- PORT AYARI ---
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=port, host="0.0.0.0")
