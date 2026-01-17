@@ -130,4 +130,5 @@ def main(page: ft.Page):
 
     page.add(mobil_ekran)
 
-ft.app(target=main)
+
+ft.app(target=main, view=ft.AppView.WEB_BROWSER)
