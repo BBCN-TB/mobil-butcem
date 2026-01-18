@@ -1,153 +1,182 @@
 import flet as ft
 from datetime import datetime
-from supabase import create_client, Client
+import json, os, math
 
-# --- SUPABASE BAĞLANTISI (Buraya kendi bilgilerini yapıştır) ---
-URL = "https://zzvadgfshqdgnmtkemyj.supabase.co"
-KEY = "sb_secret_VbEtaMYtVsAR6YUbSGpEvA_pNIhRHuD"
-supabase: Client = create_client(URL, KEY)
+DATA_FILE = "veriler.json"
 
 def main(page: ft.Page):
-    page.title = "Bütçem 2026 Pro"
-    page.theme_mode = "light"
+    page.title = "Bütçem PRO"
     page.padding = 0
     page.window_width = 400
     page.window_height = 800
 
-    # --- KATEGORİ VERİLERİ ---
-    categories_data = {
-        "Gider": ["Kredi Kartı", "Kira", "Fatura", "Eğitim", "Mutfak", "Diğer"],
-        "Gelir": ["Maaş", "Ek Gelir"],
-        "Yatırım": ["Altın", "Döviz", "Borsa"]
-    }
+    # ---------------- DATA ----------------
+    def load_data():
+        if os.path.exists(DATA_FILE):
+            try:
+                with open(DATA_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except:
+                return {}
+        return {}
 
-    # --- DEĞİŞKENLER ---
-    transactions = []
-    selected_date = datetime.now()
+    def save_data():
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
-    # --- FONKSİYONLAR (VERİTABANI) ---
-    def load_from_cloud():
-        nonlocal transactions
+    data = load_data()
+
+    def month_key(date):
+        return date.strftime("%Y-%m")
+
+    # ---------------- UI ----------------
+    summary_col = ft.Column(expand=True, scroll="auto")
+    summary_view = ft.Container(content=summary_col, expand=True)
+
+    add_col = ft.Column(spacing=15)
+    add_view = ft.Container(content=add_col, padding=20, expand=True, visible=False)
+
+    def switch(v):
+        summary_view.visible = v == "summary"
+        add_view.visible = v == "add"
+        page.update()
+
+    # ---------------- Taksit Botu ----------------
+    def add_installments(total, count, base_item):
+        base = math.floor((total / count) * 100) / 100
+        kalan = round(total - (base * count), 2)
+
+        for i in range(count):
+            d = selected_date.replace(month=selected_date.month + i)
+            amount = base
+            if i == count - 1:
+                amount += kalan
+
+            key = month_key(d)
+            if key not in data:
+                data[key] = []
+
+            data[key].append({
+                "date": d.strftime("%d.%m.%Y"),
+                "type": base_item["type"],
+                "category": base_item["category"],
+                "amount": amount,
+                "note": f"{i+1}/{count} taksit"
+            })
+
+    # ---------------- KAYDET ----------------
+    def save(e):
+        if not amount.value or not t_type.value or not category.value:
+            return
+
         try:
-            response = supabase.table("transactions").select("*").execute()
-            transactions = response.data
-            render_ui()
-        except Exception as e:
-            print(f"Hata: {e}")
+            tutar = float(amount.value.replace(",", "."))
+        except:
+            return
 
-    def save_to_cloud(item):
-        supabase.table("transactions").insert(item).execute()
-        load_from_cloud()
+        key = month_key(selected_date)
 
-    def delete_from_cloud(tid):
-        supabase.table("transactions").delete().eq("id", tid).execute()
-        load_from_cloud()
+        if key not in data:
+            data[key] = []
 
-    # --- UI MANTIĞI ---
-    summary_list = ft.Column(scroll="auto", expand=True, spacing=10)
-    summary_view = ft.Container(content=summary_list, expand=True)
-
-    add_col = ft.Column(spacing=20)
-    add_view = ft.Container(content=add_col, visible=False, expand=True, padding=20)
-
-    def switch_tab(target):
-        summary_view.visible = (target == "home")
-        add_view.visible = (target == "add")
-        page.update()
-
-    def on_type_change(e):
-        val = type_dd.value
-        category_dd.options = [ft.dropdown.Option(c) for c in categories_data[val]]
-        category_dd.value = None
-        page.update()
-
-    def handle_save(e):
-        if not amt_in.value or not type_dd.value: return
-        
-        new_item = {
-            "type": type_dd.value,
-            "category": category_dd.value or "Diğer",
-            "amount": float(amt_in.value.replace(",", ".")),
-            "date": selected_date.strftime("%d.%m.%Y")
+        item = {
+            "date": selected_date.strftime("%d.%m.%Y"),
+            "type": t_type.value,
+            "category": category.value,
+            "amount": tutar,
+            "note": ""
         }
-        save_to_cloud(new_item)
-        amt_in.value = ""
-        switch_tab("home")
 
-    def render_ui():
-        summary_list.controls.clear()
-        
-        gelir = sum(i["amount"] for i in transactions if i["type"] == "Gelir")
-        gider = sum(i["amount"] for i in transactions if i["type"] == "Gider")
-        yatirim = sum(i["amount"] for i in transactions if i["type"] == "Yatırım")
-        
-        # Mavi Özet Kartı
-        summary_list.controls.append(
+        if taksit.value and int(taksit.value) > 1:
+            add_installments(tutar, int(taksit.value), item)
+        else:
+            data[key].append(item)
+
+        save_data()
+        refresh()
+        switch("summary")
+
+    # ---------------- UI UPDATE ----------------
+    def refresh():
+        summary_col.controls.clear()
+
+        now_key = month_key(datetime.now())
+        items = data.get(now_key, [])
+
+        gelir = sum(x["amount"] for x in items if x["type"] == "Gelir")
+        gider = sum(x["amount"] for x in items if x["type"] == "Gider")
+
+        summary_col.controls.append(
             ft.Container(
+                padding=20,
+                bgcolor="blue",
+                border_radius=ft.border_radius.only(bottom_left=25, bottom_right=25),
                 content=ft.Column([
-                    ft.Text("NET BAKİYE", color="white70", size=12),
-                    ft.Text(f"₺ {gelir - gider:,.2f}", size=32, color="white", weight="bold"),
+                    ft.Text(now_key, color="white70"),
+                    ft.Text(f"₺ {gelir-gider:,.2f}", size=30, color="white", weight="bold"),
                     ft.Row([
-                        ft.Text(f"Gelir: {gelir:,.0f}", color="white"),
-                        ft.Text(f"Gider: {gider:,.0f}", color="white"),
-                        ft.Text(f"Yatırım: {yatirim:,.0f}", color="yellow"),
+                        ft.Text(f"Gelir: ₺{gelir:,.0f}", color="white"),
+                        ft.Text(f"Gider: ₺{gider:,.0f}", color="white"),
                     ], alignment="spaceBetween")
-                ], spacing=5),
-                bgcolor="blue", padding=25, border_radius=ft.border_radius.only(bottom_left=30, bottom_right=30)
+                ])
             )
         )
 
-        # İşlem Listesi
-        for t in reversed(transactions):
-            summary_list.controls.append(
+        col = ft.Column(spacing=8)
+        for x in items:
+            col.controls.append(
                 ft.Container(
+                    padding=10,
+                    bgcolor="white",
+                    border_radius=10,
+                    border=ft.border.all(1, "#eee"),
                     content=ft.Row([
-                        ft.Icon("payments", color="green" if t["type"] == "Gelir" else "red" if t["type"] == "Gider" else "orange"),
-                        ft.Column([
-                            ft.Text(f"{t['category']}", weight="bold"),
-                            ft.Text(f"{t['date']} | {t['type']}", size=12, color="grey"),
-                        ], expand=True, spacing=0),
-                        ft.Text(f"{t['amount']} ₺", weight="bold"),
-                        ft.IconButton("delete_outline", on_click=lambda e, tid=t["id"]: delete_from_cloud(tid))
-                    ]),
-                    padding=10, margin=ft.margin.symmetric(horizontal=15),
-                    bgcolor="white", border_radius=10, border=ft.border.all(1, "#eeeeee")
+                        ft.Text(x["category"], expand=True),
+                        ft.Text(f"{x['amount']:,.2f} ₺", weight="bold")
+                    ])
                 )
             )
+
+        summary_col.controls.append(ft.Container(content=col, padding=20))
         page.update()
 
-    # --- FORM ELEMANLARI ---
-    type_dd = ft.Dropdown(label="İşlem Türü", options=[ft.dropdown.Option(k) for k in categories_data.keys()], on_change=on_type_change)
-    category_dd = ft.Dropdown(label="Kategori")
-    amt_in = ft.TextField(label="Tutar", keyboard_type="number")
-    
-    date_display = ft.Text(f"Seçilen Tarih: {selected_date.strftime('%d.%m.%Y')}")
-    def on_date_change(e):
-        nonlocal selected_date
-        selected_date = e.control.value
-        date_display.value = f"Seçilen Tarih: {selected_date.strftime('%d.%m.%Y')}"
-        page.update()
+    # ---------------- FORM ----------------
+    t_type = ft.Dropdown(label="Tür", options=[
+        ft.dropdown.Option("Gelir"),
+        ft.dropdown.Option("Gider"),
+        ft.dropdown.Option("Yatırım")
+    ])
 
-    dp = ft.DatePicker(on_change=on_date_change)
+    category = ft.TextField(label="Kategori")
+    amount = ft.TextField(label="Tutar", keyboard_type="number")
+    taksit = ft.TextField(label="Taksit (opsiyonel)", keyboard_type="number")
+
+    selected_date = datetime.now()
+    dp = ft.DatePicker(on_change=lambda e: None)
     page.overlay.append(dp)
 
     add_col.controls = [
-        ft.Text("Yeni İşlem Ekle", size=24, weight="bold"),
-        type_dd, category_dd, amt_in,
-        ft.Row([ft.IconButton("calendar_today", on_click=lambda _: dp.pick_date()), date_display]),
-        ft.ElevatedButton("KAYDET", on_click=handle_save, bgcolor="blue", color="white", width=400, height=50)
+        ft.Text("Yeni İşlem", size=22, weight="bold"),
+        t_type, category, amount, taksit,
+        ft.ElevatedButton("Kaydet", on_click=save)
     ]
 
-    # --- ALT NAVİGASYON ---
     nav = ft.Container(
+        padding=10,
+        border=ft.border.only(top=ft.BorderSide(1, "#ccc")),
         content=ft.Row([
-            ft.IconButton("home", on_click=lambda _: switch_tab("home"), expand=True),
-            ft.IconButton("add", on_click=lambda _: switch_tab("add"), expand=True),
-        ]),
-        bgcolor="#f8f9fa", height=70, border=ft.border.only(top=ft.BorderSide(1, "#eeeeee"))
+            ft.IconButton("home", on_click=lambda _: switch("summary")),
+            ft.IconButton("add_circle", on_click=lambda _: switch("add")),
+        ], alignment="spaceAround")
     )
 
-    page.add(ft.Column([summary_view, add_view, nav], expand=True, spacing=0))
-    load_from_cloud()
+    page.add(
+        ft.Column([
+            ft.Stack([summary_view, add_view], expand=True),
+            nav
+        ], expand=True, spacing=0)
+    )
+
+    refresh()
 
 ft.app(target=main)
