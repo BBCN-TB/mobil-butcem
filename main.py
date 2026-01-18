@@ -33,14 +33,14 @@ def main(page: ft.Page):
         "Yatırım": ["Altın", "Döviz", "Borsa"]
     }
 
-    # --- UI İÇERİKLERİ ---
-    # Sütunlarda padding hatası almamak için Container kullanıyoruz
-    summary_container = ft.Column(scroll="auto", expand=True)
+    # --- SAYFA YAPILARI ---
+    # Özet Sayfası
+    summary_col = ft.Column(scroll="auto", expand=True)
     
-    # Ekleme sayfası içeriği (Container içine alarak padding verdik)
-    add_content_area = ft.Column(expand=True, spacing=20)
+    # Ekleme Sayfası
+    add_col = ft.Column(expand=True, spacing=20)
     add_view_wrapper = ft.Container(
-        content=add_content_area,
+        content=add_col,
         visible=False,
         expand=True,
         padding=20
@@ -48,7 +48,7 @@ def main(page: ft.Page):
 
     # --- FONKSİYONLAR ---
     def switch_page(page_name):
-        summary_container.visible = (page_name == "summary")
+        summary_col.visible = (page_name == "summary")
         add_view_wrapper.visible = (page_name == "add")
         page.update()
 
@@ -85,12 +85,12 @@ def main(page: ft.Page):
         refresh_ui()
 
     def refresh_ui():
-        summary_container.controls.clear()
+        summary_col.controls.clear()
         t_gelir = sum(t["amount"] for t in transactions if t["type"] == "Gelir")
         t_gider = sum(t["amount"] for t in transactions if t["type"] == "Gider")
         
-        # Üst Özet Kartı
-        summary_container.controls.append(
+        # Üst Kısım
+        summary_col.controls.append(
             ft.Container(
                 content=ft.Column([
                     ft.Text("OCAK 2026", color="white70", size=12),
@@ -104,9 +104,11 @@ def main(page: ft.Page):
             )
         )
         
-        list_view = ft.Column(padding=20, spacing=10)
+        # İŞTE HATALI OLAN KISIM BURAYDI, DÜZELTİLDİ:
+        list_items = ft.Column(spacing=10) # Padding kaldırıldı!
+        
         for t in reversed(transactions):
-            list_view.controls.append(
+            list_items.controls.append(
                 ft.Container(
                     content=ft.Row([
                         ft.Icon("payments", color="green" if t["type"] == "Gelir" else "red"),
@@ -120,7 +122,9 @@ def main(page: ft.Page):
                     padding=10, border_radius=10, bgcolor="white", border=ft.border.all(1, "#eeeeee")
                 )
             )
-        summary_container.controls.append(list_view)
+        
+        # Sütuna dışarıdan boşluk vermek için bir Container içine aldık
+        summary_col.controls.append(ft.Container(content=list_items, padding=20))
         page.update()
 
     # --- FORM ELEMANLARI ---
@@ -137,7 +141,7 @@ def main(page: ft.Page):
     dp = ft.DatePicker(on_change=on_date_select)
     page.overlay.append(dp)
 
-    add_content_area.controls = [
+    add_col.controls = [
         ft.Text("Yeni İşlem Ekle", size=24, weight="bold"),
         type_dd, category_dd, amt_in,
         ft.ElevatedButton("Tarih Seç", icon="calendar_today", on_click=lambda _: dp.pick_date(), width=400),
@@ -147,15 +151,15 @@ def main(page: ft.Page):
     # --- NAVİGASYON ---
     custom_nav = ft.Container(
         content=ft.Row([
-            ft.IconButton("home", on_click=lambda _: switch_page("summary"), expand=True, tooltip="Özet"),
-            ft.IconButton("add_circle", on_click=lambda _: switch_page("add"), expand=True, tooltip="Ekle"),
+            ft.IconButton("home", on_click=lambda _: switch_page("summary"), expand=True),
+            ft.IconButton("add_circle", on_click=lambda _: switch_page("add"), expand=True),
         ], alignment="around"),
         bgcolor="#f8f9fa", padding=10, border=ft.border.only(top=ft.BorderSide(1, "#cccccc"))
     )
 
     page.add(
         ft.Column([
-            ft.Container(content=summary_container, expand=True),
+            ft.Container(content=summary_col, expand=True),
             add_view_wrapper,
             custom_nav
         ], expand=True, spacing=0)
