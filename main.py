@@ -147,7 +147,7 @@ def main(page: ft.Page):
                 destinations=[
                     ft.NavigationDestination(icon=ft.icons.HOME, label="Özet"),
                     ft.NavigationDestination(icon=ft.icons.TRENDING_UP, label="Gelir"),
-                    ft.NavigationDestination(icon=ft.icons.ATTACH_MONEY, label="Borç"),
+                    ft.NavigationDestination(icon=ft.icons.PAYMENTS, label="Borç"),
                 ]
             )
         ])
