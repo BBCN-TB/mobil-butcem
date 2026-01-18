@@ -3,183 +3,130 @@ from datetime import datetime
 
 def main(page: ft.Page):
     page.title = "Bütçem 2026"
-    page.theme_mode = ft.ThemeMode.LIGHT
-    # Mobil görünüm ayarları
+    page.theme_mode = "light"
+    page.padding = 0 # Kenar boşluklarını sıfırladık ki özel menümüz tam otursun
     page.window_width = 400
     page.window_height = 800
-    page.padding = 20
-    
-    # --- VERİ SAKLAMA ---
-    # Uygulama açık kaldığı sürece verileri bu listede tutacağız
-    transactions = []
 
-    # --- KATEGORİ YAPISI ---
+    # --- VERİ VE KATEGORİLER ---
+    transactions = []
     categories_data = {
         "Gider": ["Kredi Kartı", "Kira", "Fatura", "Eğitim", "Mutfak", "Diğer"],
         "Gelir": ["Maaş", "Ek Gelir"],
         "Yatırım": ["Altın", "Döviz", "Borsa"]
     }
 
-    # --- UI BİLEŞENLERİ ---
-    
-    # 1. Sayfa: Özet (Dashboard)
-    summary_container = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
-    
-    # 2. Sayfa: İşlem Ekleme Formu Elemanları
-    type_dropdown = ft.Dropdown(
-        label="İşlem Türü",
-        options=[ft.dropdown.Option(k) for k in categories_data.keys()],
-        on_change=lambda e: update_category_options(e.control.value),
-        border_radius=10
-    )
-    
-    category_dropdown = ft.Dropdown(label="Kategori", options=[], border_radius=10)
-    amount_input = ft.TextField(label="Tutar (₺)", keyboard_type=ft.KeyboardType.NUMBER, border_radius=10)
-    date_display = ft.Text(f"Tarih: {datetime.now().strftime('%d.%m.%Y')}", size=16, weight="bold")
-    
-    selected_date = datetime.now()
+    # --- SAYFA İÇERİKLERİ ---
+    summary_content = ft.Column(scroll="auto", expand=True)
+    add_content = ft.Column(visible=False, expand=True, padding=20)
 
-    # Tarih Seçici Fonksiyonu
-    def on_date_change(e):
-        nonlocal selected_date
-        selected_date = e.control.value
-        date_display.value = f"Tarih: {selected_date.strftime('%d.%m.%Y')}"
+    # --- FONKSİYONLAR ---
+    def switch_page(page_name):
+        summary_content.visible = (page_name == "summary")
+        add_content.visible = (page_name == "add")
+        # Menü renklerini güncellemek için basit bir mantık
         page.update()
 
-    date_picker = ft.DatePicker(
-        on_change=on_date_change,
-        first_date=datetime(2025, 1, 1),
-        last_date=datetime(2030, 12, 31),
-    )
-    page.overlay.append(date_picker)
-
-    # Tür seçilince kategorileri güncelleyen fonksiyon
-    def update_category_options(t_type):
-        category_dropdown.options = [ft.dropdown.Option(c) for c in categories_data[t_type]]
-        category_dropdown.value = None
+    def update_cats(e):
+        t_type = type_dd.value
+        category_dd.options = [ft.dropdown.Option(c) for c in categories_data[t_type]]
+        category_dd.value = None
         page.update()
 
-    # İşlem Kaydetme
-    def save_transaction(e):
-        if not amount_input.value or not type_dropdown.value or not category_dropdown.value:
-            page.snack_bar = ft.SnackBar(ft.Text("Lütfen tüm alanları doldurun!"))
-            page.snack_bar.open = True
-            page.update()
-            return
-        
-        new_transaction = {
+    def save_data(e):
+        if not amt_in.value or not type_dd.value: return
+        new_item = {
             "id": datetime.now().timestamp(),
-            "type": type_dropdown.value,
-            "category": category_dropdown.value,
-            "amount": float(amount_input.value),
+            "type": type_dd.value,
+            "category": category_dd.value,
+            "amount": float(amt_in.value),
             "date": selected_date.strftime("%d.%m.%Y")
         }
-        transactions.append(new_transaction)
-        
-        # Formu sıfırla ve Özet'e dön
-        amount_input.value = ""
-        refresh_dashboard()
-        page.navigation_bar.selected_index = 0
-        switch_page(0)
-        page.update()
+        transactions.append(new_item)
+        amt_in.value = ""
+        refresh_ui()
+        switch_page("summary")
 
-    # İşlem Silme
-    def delete_item(t_id):
+    def delete_item(tid):
         nonlocal transactions
-        transactions = [t for t in transactions if t["id"] != t_id]
-        refresh_dashboard()
-        page.update()
+        transactions = [t for t in transactions if t["id"] != tid]
+        refresh_ui()
 
-    # Dashboard Yenileme
-    def refresh_dashboard():
-        summary_container.controls.clear()
+    def refresh_ui():
+        summary_content.controls.clear()
+        t_gelir = sum(t["amount"] for t in transactions if t["type"] == "Gelir")
+        t_gider = sum(t["amount"] for t in transactions if t["type"] == "Gider")
         
-        total_gelir = sum(t["amount"] for t in transactions if t["type"] == "Gelir")
-        total_gider = sum(t["amount"] for t in transactions if t["type"] == "Gider")
-        total_yatirim = sum(t["amount"] for t in transactions if t["type"] == "Yatırım")
-        net_durum = total_gelir - total_gider
-        
-        # Mavi Özet Kartı
-        summary_container.controls.append(
+        # Üst Özet Kartı
+        summary_content.controls.append(
             ft.Container(
                 content=ft.Column([
-                    ft.Text("OCAK 2026", color="white", size=18, weight="bold"),
-                    ft.Text("Kalan Nakit", color="white70"),
-                    ft.Text(f"₺ {net_durum:,.2f}", size=32, color="white", weight="bold"),
+                    ft.Text("TOPLAM BAKİYE", color="white70", size=12),
+                    ft.Text(f"₺ {t_gelir - t_gider:,.2f}", size=32, color="white", weight="bold"),
                     ft.Row([
-                        ft.Text(f"Gelir: ₺{total_gelir:,.0f}", color="white"),
-                        ft.Text(f"Gider: ₺{total_gider:,.0f}", color="white"),
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                        ft.Text(f"Gelir: ₺{t_gelir}", color="white"),
+                        ft.Text(f"Gider: ₺{t_gider}", color="white"),
+                    ], alignment="spaceBetween")
                 ]),
-                bgcolor=ft.colors.BLUE_600,
-                padding=20,
-                border_radius=20,
-                margin=ft.margin.only(bottom=20)
+                bgcolor="blue", padding=25, border_radius=ft.border_radius.only(bottom_left=30, bottom_right=30)
             )
         )
         
-        summary_container.controls.append(ft.Text("Son Hareketler", size=20, weight="bold"))
-        
-        # İşlem Listesi
+        # Liste
+        list_view = ft.Column(padding=20)
         for t in reversed(transactions):
-            icon_color = ft.colors.GREEN if t["type"] == "Gelir" else ft.colors.RED if t["type"] == "Gider" else ft.colors.ORANGE
-            summary_container.controls.append(
-                ft.Card(
-                    content=ft.ListTile(
-                        leading=ft.Icon(ft.icons.PAYMENTS, color=icon_color),
-                        title=ft.Text(f"{t['category']} - {t['amount']} ₺"),
-                        subtitle=ft.Text(f"{t['date']} | {t['type']}"),
-                        trailing=ft.IconButton(
-                            icon=ft.icons.DELETE_OUTLINE,
-                            icon_color=ft.colors.GREY_400,
-                            on_click=lambda e, tid=t["id"]: delete_item(tid)
-                        )
-                    )
+            list_view.controls.append(
+                ft.Container(
+                    content=ft.Row([
+                        ft.Icon("payments", color="green" if t["type"] == "Gelir" else "red"),
+                        ft.Column([
+                            ft.Text(f"{t['category']}", weight="bold"),
+                            ft.Text(f"{t['date']}", size=12, color="grey"),
+                        ], expand=True),
+                        ft.Text(f"{t['amount']} ₺", weight="bold"),
+                        ft.IconButton("delete_outline", on_click=lambda e, tid=t["id"]: delete_item(tid))
+                    ]),
+                    padding=10, border_radius=10, bgcolor="white", border=ft.border.all(1, "#eeeeee")
                 )
             )
-
-    # --- SAYFA YÖNETİMİ ---
-    add_transaction_view = ft.Column([
-        ft.Text("İşlem Ekle", size=28, weight="bold"),
-        ft.Divider(),
-        type_dropdown,
-        category_dropdown,
-        amount_input,
-        ft.Container(
-            content=ft.Row([
-                ft.IconButton(icon=ft.icons.CALENDAR_MONTH, on_click=lambda _: date_picker.pick_date()),
-                date_display
-            ]),
-            padding=10,
-            border=ft.border.all(1, ft.colors.GREY_400),
-            border_radius=10
-        ),
-        ft.ElevatedButton(
-            "KAYDET", 
-            on_click=save_transaction, 
-            width=400, 
-            height=50,
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10))
-        )
-    ], visible=False)
-
-    def switch_page(index):
-        summary_container.visible = (index == 0)
-        add_transaction_view.visible = (index == 1)
+        summary_content.controls.append(list_view)
         page.update()
 
-    # Alt Navigasyon Çubuğu (Doğru İsimler Kullanıldı)
-    page.navigation_bar = ft.NavigationBar(
-        destinations=[
-            ft.NavigationDestination(icon=ft.icons.HOME_ROUNDED, label="Özet"),
-            ft.NavigationDestination(icon=ft.icons.ADD_BOX_ROUNDED, label="İşlem Ekle"),
-            ft.NavigationDestination(icon=ft.icons.ANALYTICS_ROUNDED, label="Rapor"),
-        ],
-        on_change=lambda e: switch_page(e.control.selected_index)
+    # --- FORM ELEMANLARI ---
+    type_dd = ft.Dropdown(label="Tür", options=[ft.dropdown.Option(k) for k in categories_data.keys()], on_change=update_cats)
+    category_dd = ft.Dropdown(label="Kategori")
+    amt_in = ft.TextField(label="Tutar", keyboard_type="number")
+    selected_date = datetime.now()
+    date_btn = ft.ElevatedButton("Tarih Seç", icon="calendar_today", on_click=lambda _: dp.pick_date())
+    dp = ft.DatePicker(on_change=lambda e: (globals().update(selected_date=e.control.value)))
+    page.overlay.append(dp)
+
+    add_content.controls = [
+        ft.Text("İşlem Ekle", size=24, weight="bold"),
+        type_dd, category_dd, amt_in, date_btn,
+        ft.ElevatedButton("KAYDET", on_click=save_data, bgcolor="blue", color="white", height=50)
+    ]
+
+    # --- ÖZEL NAVİGASYON ÇUBUĞU (HATA VERMEYEN KISIM) ---
+    custom_nav = ft.Container(
+        content=ft.Row([
+            ft.IconButton("home", on_click=lambda _: switch_page("summary"), icon_size=30, expand=True),
+            ft.IconButton("add_circle", on_click=lambda _: switch_page("add"), icon_size=30, expand=True),
+        ], alignment="around"),
+        bgcolor="#f8f9fa",
+        padding=10,
+        border=ft.border.only(top=ft.BorderSide(1, "#cccccc"))
     )
 
-    page.add(summary_container, add_transaction_view)
-    refresh_dashboard()
-    switch_page(0)
+    # ANA YAPI
+    page.add(
+        ft.Column([
+            ft.Container(content=summary_content, expand=True),
+            ft.Container(content=add_content, expand=True),
+            custom_nav
+        ], expand=True, spacing=0)
+    )
+
+    refresh_ui()
 
 ft.app(target=main)
