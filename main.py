@@ -6,7 +6,7 @@ import os
 DATA_FILE = "veriler.json"
 
 def main(page: ft.Page):
-    page.title = "Bütçem 2026 - Kalıcı Veri"
+    page.title = "Bütçem 2026"
     page.theme_mode = "light"
     page.padding = 0
     page.window_width = 400
@@ -33,32 +33,47 @@ def main(page: ft.Page):
         "Yatırım": ["Altın", "Döviz", "Borsa"]
     }
 
-    # --- UI ELEMANLARI ---
-    summary_content = ft.Column(scroll="auto", expand=True)
-    add_content = ft.Column(visible=False, expand=True, padding=20)
+    # --- UI İÇERİKLERİ ---
+    # Sütunlarda padding hatası almamak için Container kullanıyoruz
+    summary_container = ft.Column(scroll="auto", expand=True)
+    
+    # Ekleme sayfası içeriği (Container içine alarak padding verdik)
+    add_content_area = ft.Column(expand=True, spacing=20)
+    add_view_wrapper = ft.Container(
+        content=add_content_area,
+        visible=False,
+        expand=True,
+        padding=20
+    )
 
+    # --- FONKSİYONLAR ---
     def switch_page(page_name):
-        summary_content.visible = (page_name == "summary")
-        add_content.visible = (page_name == "add")
+        summary_container.visible = (page_name == "summary")
+        add_view_wrapper.visible = (page_name == "add")
         page.update()
 
     def update_cats(e):
         t_type = type_dd.value
-        category_dd.options = [ft.dropdown.Option(c) for c in categories_data[t_type]]
-        category_dd.value = None
-        page.update()
+        if t_type in categories_data:
+            category_dd.options = [ft.dropdown.Option(c) for c in categories_data[t_type]]
+            category_dd.value = None
+            page.update()
 
     def save_data(e):
         if not amt_in.value or not type_dd.value: return
+        try:
+            tutar = float(amt_in.value.replace(",", "."))
+        except: return
+
         new_item = {
             "id": datetime.now().timestamp(),
             "type": type_dd.value,
-            "category": category_dd.value,
-            "amount": float(amt_in.value),
+            "category": category_dd.value if category_dd.value else "Genel",
+            "amount": tutar,
             "date": selected_date.strftime("%d.%m.%Y")
         }
         transactions.append(new_item)
-        verileri_kaydet() # VERİYİ DOSYAYA YAZDIK
+        verileri_kaydet()
         amt_in.value = ""
         refresh_ui()
         switch_page("summary")
@@ -66,29 +81,30 @@ def main(page: ft.Page):
     def delete_item(tid):
         nonlocal transactions
         transactions = [t for t in transactions if t["id"] != tid]
-        verileri_kaydet() # VERİYİ SİLDİKTEN SONRA DOSYAYI GÜNCELLEDİK
+        verileri_kaydet()
         refresh_ui()
 
     def refresh_ui():
-        summary_content.controls.clear()
+        summary_container.controls.clear()
         t_gelir = sum(t["amount"] for t in transactions if t["type"] == "Gelir")
         t_gider = sum(t["amount"] for t in transactions if t["type"] == "Gider")
         
-        summary_content.controls.append(
+        # Üst Özet Kartı
+        summary_container.controls.append(
             ft.Container(
                 content=ft.Column([
-                    ft.Text("TOPLAM BAKİYE", color="white70", size=12),
+                    ft.Text("OCAK 2026", color="white70", size=12),
                     ft.Text(f"₺ {t_gelir - t_gider:,.2f}", size=32, color="white", weight="bold"),
                     ft.Row([
-                        ft.Text(f"Gelir: ₺{t_gelir}", color="white"),
-                        ft.Text(f"Gider: ₺{t_gider}", color="white"),
+                        ft.Text(f"Gelir: ₺{t_gelir:,.0f}", color="white"),
+                        ft.Text(f"Gider: ₺{t_gider:,.0f}", color="white"),
                     ], alignment="spaceBetween")
                 ]),
                 bgcolor="blue", padding=25, border_radius=ft.border_radius.only(bottom_left=30, bottom_right=30)
             )
         )
         
-        list_view = ft.Column(padding=20)
+        list_view = ft.Column(padding=20, spacing=10)
         for t in reversed(transactions):
             list_view.controls.append(
                 ft.Container(
@@ -97,20 +113,20 @@ def main(page: ft.Page):
                         ft.Column([
                             ft.Text(f"{t['category']}", weight="bold"),
                             ft.Text(f"{t['date']}", size=12, color="grey"),
-                        ], expand=True),
+                        ], expand=True, spacing=2),
                         ft.Text(f"{t['amount']} ₺", weight="bold"),
                         ft.IconButton("delete_outline", on_click=lambda e, tid=t["id"]: delete_item(tid))
                     ]),
                     padding=10, border_radius=10, bgcolor="white", border=ft.border.all(1, "#eeeeee")
                 )
             )
-        summary_content.controls.append(list_view)
+        summary_container.controls.append(list_view)
         page.update()
 
-    # Form Elemanları
-    type_dd = ft.Dropdown(label="Tür", options=[ft.dropdown.Option(k) for k in categories_data.keys()], on_change=update_cats)
-    category_dd = ft.Dropdown(label="Kategori")
-    amt_in = ft.TextField(label="Tutar", keyboard_type="number")
+    # --- FORM ELEMANLARI ---
+    type_dd = ft.Dropdown(label="İşlem Türü", options=[ft.dropdown.Option(k) for k in categories_data.keys()], on_change=update_cats)
+    category_dd = ft.Dropdown(label="Kategori Seçin")
+    amt_in = ft.TextField(label="Tutar (₺)", keyboard_type="number")
     selected_date = datetime.now()
     
     def on_date_select(e):
@@ -121,22 +137,30 @@ def main(page: ft.Page):
     dp = ft.DatePicker(on_change=on_date_select)
     page.overlay.append(dp)
 
-    add_content.controls = [
-        ft.Text("İşlem Ekle", size=24, weight="bold"),
+    add_content_area.controls = [
+        ft.Text("Yeni İşlem Ekle", size=24, weight="bold"),
         type_dd, category_dd, amt_in,
-        ft.ElevatedButton("Tarih Seç", icon="calendar_today", on_click=lambda _: dp.pick_date()),
-        ft.ElevatedButton("KAYDET", on_click=save_data, bgcolor="blue", color="white", height=50, width=400)
+        ft.ElevatedButton("Tarih Seç", icon="calendar_today", on_click=lambda _: dp.pick_date(), width=400),
+        ft.ElevatedButton("İŞLEMİ KAYDET", on_click=save_data, bgcolor="blue", color="white", height=50, width=400)
     ]
 
+    # --- NAVİGASYON ---
     custom_nav = ft.Container(
         content=ft.Row([
-            ft.IconButton("home", on_click=lambda _: switch_page("summary"), expand=True),
-            ft.IconButton("add_circle", on_click=lambda _: switch_page("add"), expand=True),
-        ]),
+            ft.IconButton("home", on_click=lambda _: switch_page("summary"), expand=True, tooltip="Özet"),
+            ft.IconButton("add_circle", on_click=lambda _: switch_page("add"), expand=True, tooltip="Ekle"),
+        ], alignment="around"),
         bgcolor="#f8f9fa", padding=10, border=ft.border.only(top=ft.BorderSide(1, "#cccccc"))
     )
 
-    page.add(ft.Column([ft.Container(content=summary_content, expand=True), ft.Container(content=add_content, expand=True), custom_nav], expand=True, spacing=0))
+    page.add(
+        ft.Column([
+            ft.Container(content=summary_container, expand=True),
+            add_view_wrapper,
+            custom_nav
+        ], expand=True, spacing=0)
+    )
+
     refresh_ui()
 
 ft.app(target=main)
