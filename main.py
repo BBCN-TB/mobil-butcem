@@ -1,30 +1,45 @@
 import flet as ft
 from datetime import datetime
+import json
+import os
+
+DATA_FILE = "veriler.json"
 
 def main(page: ft.Page):
-    page.title = "Bütçem 2026"
+    page.title = "Bütçem 2026 - Kalıcı Veri"
     page.theme_mode = "light"
-    page.padding = 0 # Kenar boşluklarını sıfırladık ki özel menümüz tam otursun
+    page.padding = 0
     page.window_width = 400
     page.window_height = 800
 
-    # --- VERİ VE KATEGORİLER ---
-    transactions = []
+    # --- VERİ YÖNETİMİ ---
+    def verileri_yukle():
+        if os.path.exists(DATA_FILE):
+            try:
+                with open(DATA_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except: return []
+        return []
+
+    def verileri_kaydet():
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(transactions, f, ensure_ascii=False, indent=4)
+
+    transactions = verileri_yukle()
+
     categories_data = {
         "Gider": ["Kredi Kartı", "Kira", "Fatura", "Eğitim", "Mutfak", "Diğer"],
         "Gelir": ["Maaş", "Ek Gelir"],
         "Yatırım": ["Altın", "Döviz", "Borsa"]
     }
 
-    # --- SAYFA İÇERİKLERİ ---
+    # --- UI ELEMANLARI ---
     summary_content = ft.Column(scroll="auto", expand=True)
     add_content = ft.Column(visible=False, expand=True, padding=20)
 
-    # --- FONKSİYONLAR ---
     def switch_page(page_name):
         summary_content.visible = (page_name == "summary")
         add_content.visible = (page_name == "add")
-        # Menü renklerini güncellemek için basit bir mantık
         page.update()
 
     def update_cats(e):
@@ -43,6 +58,7 @@ def main(page: ft.Page):
             "date": selected_date.strftime("%d.%m.%Y")
         }
         transactions.append(new_item)
+        verileri_kaydet() # VERİYİ DOSYAYA YAZDIK
         amt_in.value = ""
         refresh_ui()
         switch_page("summary")
@@ -50,6 +66,7 @@ def main(page: ft.Page):
     def delete_item(tid):
         nonlocal transactions
         transactions = [t for t in transactions if t["id"] != tid]
+        verileri_kaydet() # VERİYİ SİLDİKTEN SONRA DOSYAYI GÜNCELLEDİK
         refresh_ui()
 
     def refresh_ui():
@@ -57,7 +74,6 @@ def main(page: ft.Page):
         t_gelir = sum(t["amount"] for t in transactions if t["type"] == "Gelir")
         t_gider = sum(t["amount"] for t in transactions if t["type"] == "Gider")
         
-        # Üst Özet Kartı
         summary_content.controls.append(
             ft.Container(
                 content=ft.Column([
@@ -72,7 +88,6 @@ def main(page: ft.Page):
             )
         )
         
-        # Liste
         list_view = ft.Column(padding=20)
         for t in reversed(transactions):
             list_view.controls.append(
@@ -92,41 +107,36 @@ def main(page: ft.Page):
         summary_content.controls.append(list_view)
         page.update()
 
-    # --- FORM ELEMANLARI ---
+    # Form Elemanları
     type_dd = ft.Dropdown(label="Tür", options=[ft.dropdown.Option(k) for k in categories_data.keys()], on_change=update_cats)
     category_dd = ft.Dropdown(label="Kategori")
     amt_in = ft.TextField(label="Tutar", keyboard_type="number")
     selected_date = datetime.now()
-    date_btn = ft.ElevatedButton("Tarih Seç", icon="calendar_today", on_click=lambda _: dp.pick_date())
-    dp = ft.DatePicker(on_change=lambda e: (globals().update(selected_date=e.control.value)))
+    
+    def on_date_select(e):
+        nonlocal selected_date
+        selected_date = e.control.value
+        page.update()
+
+    dp = ft.DatePicker(on_change=on_date_select)
     page.overlay.append(dp)
 
     add_content.controls = [
         ft.Text("İşlem Ekle", size=24, weight="bold"),
-        type_dd, category_dd, amt_in, date_btn,
-        ft.ElevatedButton("KAYDET", on_click=save_data, bgcolor="blue", color="white", height=50)
+        type_dd, category_dd, amt_in,
+        ft.ElevatedButton("Tarih Seç", icon="calendar_today", on_click=lambda _: dp.pick_date()),
+        ft.ElevatedButton("KAYDET", on_click=save_data, bgcolor="blue", color="white", height=50, width=400)
     ]
 
-    # --- ÖZEL NAVİGASYON ÇUBUĞU (HATA VERMEYEN KISIM) ---
     custom_nav = ft.Container(
         content=ft.Row([
-            ft.IconButton("home", on_click=lambda _: switch_page("summary"), icon_size=30, expand=True),
-            ft.IconButton("add_circle", on_click=lambda _: switch_page("add"), icon_size=30, expand=True),
-        ], alignment="around"),
-        bgcolor="#f8f9fa",
-        padding=10,
-        border=ft.border.only(top=ft.BorderSide(1, "#cccccc"))
+            ft.IconButton("home", on_click=lambda _: switch_page("summary"), expand=True),
+            ft.IconButton("add_circle", on_click=lambda _: switch_page("add"), expand=True),
+        ]),
+        bgcolor="#f8f9fa", padding=10, border=ft.border.only(top=ft.BorderSide(1, "#cccccc"))
     )
 
-    # ANA YAPI
-    page.add(
-        ft.Column([
-            ft.Container(content=summary_content, expand=True),
-            ft.Container(content=add_content, expand=True),
-            custom_nav
-        ], expand=True, spacing=0)
-    )
-
+    page.add(ft.Column([ft.Container(content=summary_content, expand=True), ft.Container(content=add_content, expand=True), custom_nav], expand=True, spacing=0))
     refresh_ui()
 
 ft.app(target=main)
