@@ -1,182 +1,151 @@
 import flet as ft
 from datetime import datetime
-import json, os, math
+from supabase import create_client, Client
 
-DATA_FILE = "veriler.json"
+# --- SUPABASE AYARLARI ---
+# Burayı kendi bilgilerine göre doldur
+URL = "https://buraya_url_gelecek.supabase.co"
+KEY = "buraya_anon_key_gelecek"
+supabase: Client = create_client(URL, KEY)
 
 def main(page: ft.Page):
-    page.title = "Bütçem PRO"
+    page.title = "Bütçem 2026 - Streamlit Pro"
+    page.theme_mode = "light"
     page.padding = 0
-    page.window_width = 400
-    page.window_height = 800
+    page.spacing = 0
 
-    # ---------------- DATA ----------------
+    # --- DURUM YÖNETİMİ ---
+    transactions = []
+    current_date = datetime.now()
+
+    cats = {
+        "Gider": ["Kredi Kartı", "Kira", "Fatura", "Eğitim", "Mutfak", "Diğer"],
+        "Gelir": ["Maaş", "Ek Gelir"],
+        "Yatırım": ["Altın", "Döviz", "Borsa"]
+    }
+
+    # --- VERİTABANI İŞLEMLERİ ---
     def load_data():
-        if os.path.exists(DATA_FILE):
-            try:
-                with open(DATA_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except:
-                return {}
-        return {}
-
-    def save_data():
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-    data = load_data()
-
-    def month_key(date):
-        return date.strftime("%Y-%m")
-
-    # ---------------- UI ----------------
-    summary_col = ft.Column(expand=True, scroll="auto")
-    summary_view = ft.Container(content=summary_col, expand=True)
-
-    add_col = ft.Column(spacing=15)
-    add_view = ft.Container(content=add_col, padding=20, expand=True, visible=False)
-
-    def switch(v):
-        summary_view.visible = v == "summary"
-        add_view.visible = v == "add"
-        page.update()
-
-    # ---------------- Taksit Botu ----------------
-    def add_installments(total, count, base_item):
-        base = math.floor((total / count) * 100) / 100
-        kalan = round(total - (base * count), 2)
-
-        for i in range(count):
-            d = selected_date.replace(month=selected_date.month + i)
-            amount = base
-            if i == count - 1:
-                amount += kalan
-
-            key = month_key(d)
-            if key not in data:
-                data[key] = []
-
-            data[key].append({
-                "date": d.strftime("%d.%m.%Y"),
-                "type": base_item["type"],
-                "category": base_item["category"],
-                "amount": amount,
-                "note": f"{i+1}/{count} taksit"
-            })
-
-    # ---------------- KAYDET ----------------
-    def save(e):
-        if not amount.value or not t_type.value or not category.value:
-            return
-
+        nonlocal transactions
         try:
-            tutar = float(amount.value.replace(",", "."))
-        except:
-            return
+            res = supabase.table("transactions").select("*").execute()
+            transactions = res.data
+            update_views()
+        except: pass
 
-        key = month_key(selected_date)
+    def save_data(item):
+        supabase.table("transactions").insert(item).execute()
+        load_data()
 
-        if key not in data:
-            data[key] = []
+    def delete_data(tid):
+        supabase.table("transactions").delete().eq("id", tid).execute()
+        load_data()
 
-        item = {
-            "date": selected_date.strftime("%d.%m.%Y"),
-            "type": t_type.value,
-            "category": category.value,
-            "amount": tutar,
-            "note": ""
-        }
+    # --- SAYFA YAPILARI (CONTAINERS) ---
+    summary_page = ft.Column(scroll="auto", expand=True)
+    add_page = ft.Column(visible=False, expand=True, spacing=20)
+    report_page = ft.Column(visible=False, expand=True, scroll="auto")
 
-        if taksit.value and int(taksit.value) > 1:
-            add_installments(tutar, int(taksit.value), item)
-        else:
-            data[key].append(item)
-
-        save_data()
-        refresh()
-        switch("summary")
-
-    # ---------------- UI UPDATE ----------------
-    def refresh():
-        summary_col.controls.clear()
-
-        now_key = month_key(datetime.now())
-        items = data.get(now_key, [])
-
-        gelir = sum(x["amount"] for x in items if x["type"] == "Gelir")
-        gider = sum(x["amount"] for x in items if x["type"] == "Gider")
-
-        summary_col.controls.append(
+    # --- UI GÜNCELLEME (RE-RENDER) ---
+    def update_views():
+        # 1. Özet Sayfası Yenileme
+        summary_page.controls.clear()
+        gelir = sum(t["amount"] for t in transactions if t["type"] == "Gelir")
+        gider = sum(t["amount"] for t in transactions if t["type"] == "Gider")
+        yatirim = sum(t["amount"] for t in transactions if t["type"] == "Yatırım")
+        
+        summary_page.controls.append(
             ft.Container(
-                padding=20,
-                bgcolor="blue",
-                border_radius=ft.border_radius.only(bottom_left=25, bottom_right=25),
                 content=ft.Column([
-                    ft.Text(now_key, color="white70"),
-                    ft.Text(f"₺ {gelir-gider:,.2f}", size=30, color="white", weight="bold"),
+                    ft.Text("TOPLAM VARLIK", color="white70", size=12),
+                    ft.Text(f"₺ {gelir - gider:,.2f}", size=34, color="white", weight="bold"),
                     ft.Row([
-                        ft.Text(f"Gelir: ₺{gelir:,.0f}", color="white"),
-                        ft.Text(f"Gider: ₺{gider:,.0f}", color="white"),
+                        ft.Text(f"Gelir: {gelir:,.0f}", color="white"),
+                        ft.Text(f"Gider: {gider:,.0f}", color="white"),
                     ], alignment="spaceBetween")
-                ])
+                ]),
+                bgcolor="blue", padding=30, border_radius=ft.border_radius.only(bottom_left=30, bottom_right=30)
             )
         )
-
-        col = ft.Column(spacing=8)
-        for x in items:
-            col.controls.append(
+        
+        list_area = ft.Column(padding=20, spacing=10)
+        for t in reversed(transactions):
+            list_area.controls.append(
                 ft.Container(
-                    padding=10,
-                    bgcolor="white",
-                    border_radius=10,
-                    border=ft.border.all(1, "#eee"),
                     content=ft.Row([
-                        ft.Text(x["category"], expand=True),
-                        ft.Text(f"{x['amount']:,.2f} ₺", weight="bold")
-                    ])
+                        ft.Icon("payments", color="green" if t["type"]=="Gelir" else "red"),
+                        ft.Column([ft.Text(t["category"], weight="bold"), ft.Text(t["date"], size=12)], expand=True, spacing=0),
+                        ft.Text(f"{t['amount']} ₺", weight="bold"),
+                        ft.IconButton("delete", on_click=lambda e, tid=t["id"]: delete_data(tid))
+                    ]),
+                    padding=10, border=ft.border.all(1, "#eee"), border_radius=10
                 )
             )
+        summary_page.controls.append(list_area)
 
-        summary_col.controls.append(ft.Container(content=col, padding=20))
+        # 2. Rapor Sayfası Yenileme (Pie Chart)
+        report_page.controls.clear()
+        if transactions:
+            # Gider Dağılımı Verisi
+            gider_toplam = sum(t["amount"] for t in transactions if t["type"] == "Gider")
+            chart = ft.PieChart(
+                sections=[
+                    ft.PieChartSection(t["amount"], title=f"%{int(t['amount']/gider_toplam*100)}", color=ft.colors.random(t["category"]))
+                    for t in transactions if t["type"] == "Gider"
+                ],
+                sections_space=2, center_space_radius=40, height=200
+            )
+            report_page.controls.append(ft.Container(content=ft.Column([
+                ft.Text("Gider Dağılımı", size=20, weight="bold"),
+                chart,
+                ft.Text(f"Toplam Gider: {gider_toplam} ₺", size=16)
+            ]), padding=20))
+
         page.update()
 
-    # ---------------- FORM ----------------
-    t_type = ft.Dropdown(label="Tür", options=[
-        ft.dropdown.Option("Gelir"),
-        ft.dropdown.Option("Gider"),
-        ft.dropdown.Option("Yatırım")
-    ])
-
-    category = ft.TextField(label="Kategori")
-    amount = ft.TextField(label="Tutar", keyboard_type="number")
-    taksit = ft.TextField(label="Taksit (opsiyonel)", keyboard_type="number")
-
-    selected_date = datetime.now()
-    dp = ft.DatePicker(on_change=lambda e: None)
+    # --- FORM ELEMANLARI ---
+    type_dd = ft.Dropdown(label="Tür", options=[ft.dropdown.Option(k) for k in cats.keys()],
+                         on_change=lambda e: (setattr(cat_dd, "options", [ft.dropdown.Option(c) for c in cats[type_dd.value]]), page.update()))
+    cat_dd = ft.Dropdown(label="Kategori")
+    amt_tf = ft.TextField(label="Tutar", keyboard_type="number")
+    
+    dp = ft.DatePicker(on_change=lambda e: (globals().update(current_date=e.control.value)))
     page.overlay.append(dp)
 
-    add_col.controls = [
-        ft.Text("Yeni İşlem", size=22, weight="bold"),
-        t_type, category, amount, taksit,
-        ft.ElevatedButton("Kaydet", on_click=save)
+    add_page.controls = [
+        ft.Container(content=ft.Column([
+            ft.Text("Yeni İşlem", size=24, weight="bold"),
+            type_dd, cat_dd, amt_tf,
+            ft.ElevatedButton("Tarih Seç", icon="calendar_today", on_click=lambda _: dp.pick_date()),
+            ft.ElevatedButton("KAYDET", on_click=lambda _: (save_data({
+                "type": type_dd.value, "category": cat_dd.value, "amount": float(amt_tf.value), 
+                "date": current_date.strftime("%d.%m.%Y")
+            }), switch("home")), bgcolor="blue", color="white", width=400, height=50)
+        ]), padding=20)
     ]
 
+    # --- NAVİGASYON ---
+    def switch(t):
+        summary_page.visible = (t == "home")
+        add_page.visible = (t == "add")
+        report_page.visible = (t == "report")
+        page.update()
+
     nav = ft.Container(
-        padding=10,
-        border=ft.border.only(top=ft.BorderSide(1, "#ccc")),
         content=ft.Row([
-            ft.IconButton("home", on_click=lambda _: switch("summary")),
-            ft.IconButton("add_circle", on_click=lambda _: switch("add")),
-        ], alignment="spaceAround")
+            ft.IconButton("home", on_click=lambda _: switch("home"), expand=True),
+            ft.IconButton("add", on_click=lambda _: switch("add"), expand=True),
+            ft.IconButton("pie_chart", on_click=lambda _: switch("report"), expand=True),
+        ]), bgcolor="#f8f9fa", height=65
     )
 
-    page.add(
-        ft.Column([
-            ft.Stack([summary_view, add_view], expand=True),
-            nav
-        ], expand=True, spacing=0)
-    )
+    page.add(ft.Column([
+        ft.Container(content=summary_page, expand=True),
+        ft.Container(content=add_page, expand=True),
+        ft.Container(content=report_page, expand=True),
+        nav
+    ], expand=True, spacing=0))
 
-    refresh()
+    load_data()
 
 ft.app(target=main)
